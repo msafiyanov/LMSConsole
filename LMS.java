@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
+import javax.sound.midi.SysexMessage;
 import javax.swing.plaf.basic.BasicInternalFrameTitlePane.RestoreAction;
 
 /**
@@ -868,9 +869,12 @@ public class LMS {
 		pstmt = conn.prepareStatement("select bookId from tbl_book where title = ?" );
 		pstmt.setString(1, newBookTitle);
 		rs = pstmt.executeQuery();
-		int bookId = rs.getInt("bookId");
+		int bookId = 0;
 		
-		int authorId;
+		while (rs.next())
+			 bookId = rs.getInt("bookId");
+		
+		int authorId = 0;
 		String authorName;
 				
 		int menu = in.nextInt();
@@ -892,7 +896,8 @@ public class LMS {
 			pstmt.setString(1, authorName);
 			rs = pstmt.executeQuery();
 			
-			authorId = rs.getInt("authorId");			
+			while (rs.next())
+				authorId = rs.getInt("authorId");			
 		}
 		else if (menu <= authors.size()) // Author from the database
 		{
@@ -915,43 +920,51 @@ public class LMS {
 	}
 
 	private static void addBookLinkPulisherToBook(String newBookTitle) throws SQLException {
-		PreparedStatement pstmt = conn.prepareStatement("select publisherName, publisherId from tbl_publisher");
+		
+		PreparedStatement pstmt = conn.prepareStatement("select publisherId, publisherName, publisherAddress, publisherPhone from tbl_publisher");
 		ResultSet rs = pstmt.executeQuery();
-		String newPublisherName, pubName;
-		int pubId;
+		String pubName, pubAddress, pubPhone;
+		List<Publisher> publishers = new ArrayList<Publisher>();
+		int pubId, menu;
 		
-		System.out.println("The list of existing publishers:");
+		int i = 0;
+		System.out.println("Please select a publisher for your book:");
 		while (rs.next())
 		{
-			pubName = rs.getString(1);
-			pubId = rs.getInt(2);
-			System.out.println(pubName);
+			i++;
+			pubId = rs.getInt(1);
+			pubName = rs.getString(2);
+			pubAddress = rs.getString(3);
+			pubPhone = rs.getString(4);			
+			System.out.println(i + ")  " + pubName);
+			publishers.add(new Publisher(pubId, pubName, pubAddress, pubPhone));
 		}
+		System.out.println(i + 1 + ")  Create a book WITHOUT a publisher");
 		System.out.println();
-		System.out.println("Please enter the name of the publisher from the list above. Enter the actual name, NOT a number:");
-		newPublisherName = in.nextLine();
 		
-		//Lookup the tbl_publisher to see if this Publisher is already in the table
-		pstmt = conn.prepareStatement("select publisherName, publisherId from tbl_publisher");
-		rs = pstmt.executeQuery();
-		while (rs.next())
-		{
-			pubName = rs.getString(1);
-			pubId = rs.getInt(2);
-			if (newPublisherName.equals(pubName)) // Publisher found in the list, so publisher will be linked to Book
-				{
-					pstmt = conn.prepareStatement("insert into tbl_book (title, pubId) values (?,?)" );
-					pstmt.setString(1, newBookTitle);
-					pstmt.setInt(2, pubId);
-					pstmt.executeUpdate();
-					return;
-				}
+		do {
+			
+		menu = in.nextInt();
+		
+		if (menu > 0 && menu <= i) {
+			
+			pstmt = conn.prepareStatement("insert into tbl_book (title, pubId) values (?,?)" );
+			pstmt.setString(1, newBookTitle);
+			pstmt.setInt(2, publishers.get(menu - 1).getPubId());
+			pstmt.executeUpdate();
 		}
-		// Publisher not found. No publisher is linked
-		System.out.println("The publisher name you entered is not in the list. Creating book without publisher");
-		pstmt = conn.prepareStatement("insert into tbl_book (title) values (?)");
-		pstmt.setString(1, newBookTitle);
-		pstmt.executeUpdate();	
+		else if (menu == i + 1)
+		{
+			// Creating a book without a publisher
+			pstmt = conn.prepareStatement("insert into tbl_book (title) values (?)");
+			pstmt.setString(1, newBookTitle);
+			pstmt.executeUpdate();
+		}
+		else
+			System.err.println("You must a pick a number from 1 to " + i + 1);
+		} while (menu < 1 || menu > i + 1);
+		
+		System.out.println("The book has been successfully added");	
 	}
 
 	private static void deleteBook(Book book, List<Author> authors, int updateMenu) throws SQLException {
